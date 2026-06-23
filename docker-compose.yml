@@ -1,0 +1,3 @@
+# Optional: one-command run for frontend + backend.
+# TODO: define services for the .NET API and the Vite frontend.
+services: {}
