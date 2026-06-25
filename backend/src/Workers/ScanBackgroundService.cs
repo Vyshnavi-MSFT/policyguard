@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PolicyGuard.Data;
+using PolicyGuard.Detection;
 using PolicyGuard.Models;
+using PolicyGuard.Storage;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,12 +21,20 @@ public class ScanBackgroundService : BackgroundService
 {
     private readonly ILogger<ScanBackgroundService> _logger;
     private readonly IServiceProvider _serviceProvider;
+    private readonly CodeScanner _codeScanner;
+    private readonly IWebHostEnvironment _env;
     private static readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(5);
 
-    public ScanBackgroundService(ILogger<ScanBackgroundService> logger, IServiceProvider serviceProvider)
+    public ScanBackgroundService(
+        ILogger<ScanBackgroundService> logger,
+        IServiceProvider serviceProvider,
+        CodeScanner codeScanner,
+        IWebHostEnvironment env)
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
+        _codeScanner = codeScanner;
+        _env = env;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -73,17 +83,15 @@ public class ScanBackgroundService : BackgroundService
             scan.Status = "SCANNING";
             await db.SaveChangesAsync(ct);
 
-            // ===== STUB: Run detectors =====
-            // In real implementation, call Person C & D's detectors
-            // For now, create mock findings for demo purposes
-            var mockFindings = CreateMockFindings(scan.Id);
-            db.Findings.AddRange(mockFindings);
+            // ===== Run detectors (Person C — code scanning) =====
+            var findings = await RunCodeScanners(scan, ct);
+            db.Findings.AddRange(findings);
             await db.SaveChangesAsync(ct);
 
             // ===== STUB: Call AI reasoner =====
-            // In real implementation, call Person F's AI reasoning
-            // For now, just populate some stub data
-            foreach (var finding in mockFindings)
+            // In the real implementation, Person F's AI reasoning fills severity, the policy
+            // citation, the explanation, and the proposed fix. For now, populate placeholder data.
+            foreach (var finding in findings)
             {
                 finding.Severity = "HIGH";
                 finding.PolicyClauseId = "GDPR-Art5-1c";
@@ -97,8 +105,8 @@ public class ScanBackgroundService : BackgroundService
             scan.CompletedAt = DateTime.UtcNow;
             await db.SaveChangesAsync(ct);
 
-            _logger.LogInformation("Scan {ScanId} completed successfully with {Count} findings", 
-                scan.Id, mockFindings.Count);
+            _logger.LogInformation("Scan {ScanId} completed successfully with {Count} findings",
+                scan.Id, findings.Count);
         }
         catch (Exception ex)
         {
@@ -110,39 +118,63 @@ public class ScanBackgroundService : BackgroundService
     }
 
     /// <summary>
-    /// STUB: Create mock findings for demonstration.
-    /// In real implementation, detectors (Person C & D) would create these.
+    /// Reads every uploaded file for the scan and runs the code scanners over it.
+    /// Stamps the ScanId (which the scanners don't know) onto each resulting finding.
     /// </summary>
-    private List<Finding> CreateMockFindings(string scanId)
+    private async Task<List<Finding>> RunCodeScanners(Scan scan, CancellationToken ct)
     {
-        return new List<Finding>
+        var findings = new List<Finding>();
+        var scanFolder = UploadStorage.GetScanFolder(_env.ContentRootPath, scan.Id);
+
+        if (!Directory.Exists(scanFolder))
         {
-            new Finding
+            _logger.LogWarning("No uploaded files found for scan {ScanId} at {Folder}", scan.Id, scanFolder);
+            return findings;
+        }
+
+        foreach (var path in Directory.EnumerateFiles(scanFolder))
+        {
+            ct.ThrowIfCancellationRequested();
+            var fileName = Path.GetFileName(path);
+
+            string content;
+            try
             {
-                Id = Guid.NewGuid().ToString(),
-                ScanId = scanId,
-                DataType = "EMAIL",
-                Severity = "HIGH",
-                Location = "customers.csv:column=2",
-                Snippet = "john@gmail.com",
-                DetectedBy = "AZURE_LANGUAGE",
-                Status = "PENDING_REVIEW",
-                FixTool = "MASK_COLUMN",
-                FixArgs = """{"column":"email","style":"partial"}"""
-            },
-            new Finding
-            {
-                Id = Guid.NewGuid().ToString(),
-                ScanId = scanId,
-                DataType = "SSN",
-                Severity = "CRITICAL",
-                Location = "customers.csv:column=4",
-                Snippet = "123-45-6789",
-                DetectedBy = "REGEX",
-                Status = "PENDING_REVIEW",
-                FixTool = "DROP_COLUMN",
-                FixArgs = """{"column":"ssn"}"""
+                content = await File.ReadAllTextAsync(path, ct);
             }
+            catch (Exception ex)
+            {
+                // Likely a binary file (e.g. .xlsx) — skip text scanning for now.
+                _logger.LogWarning(ex, "Skipping unreadable file {File} in scan {ScanId}", fileName, scan.Id);
+                continue;
+            }
+
+            var input = new SourceInput(fileName, content, GuessLanguage(fileName));
+            var fileFindings = await _codeScanner.ScanAsync(input, ct);
+
+            foreach (var finding in fileFindings)
+            {
+                finding.ScanId = scan.Id;
+            }
+
+            findings.AddRange(fileFindings);
+        }
+
+        _logger.LogInformation("Detection produced {Count} findings for scan {ScanId}", findings.Count, scan.Id);
+        return findings;
+    }
+
+    /// <summary>Maps a file extension to a language hint for the scanners.</summary>
+    private static string? GuessLanguage(string fileName)
+    {
+        return Path.GetExtension(fileName).ToLowerInvariant() switch
+        {
+            ".cs" => "csharp",
+            ".json" => "json",
+            ".csv" => "csv",
+            ".py" => "python",
+            ".js" or ".ts" => "javascript",
+            _ => null,
         };
     }
 }

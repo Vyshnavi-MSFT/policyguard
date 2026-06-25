@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PolicyGuard.Data;
 using PolicyGuard.Models;
+using PolicyGuard.Storage;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -14,11 +15,13 @@ public class ScanController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly ILogger<ScanController> _logger;
+    private readonly IWebHostEnvironment _env;
 
-    public ScanController(AppDbContext db, ILogger<ScanController> logger)
+    public ScanController(AppDbContext db, ILogger<ScanController> logger, IWebHostEnvironment env)
     {
         _db = db;
         _logger = logger;
+        _env = env;
     }
 
     /// <summary>
@@ -52,8 +55,20 @@ public class ScanController : ControllerBase
 
         _logger.LogInformation("Scan {ScanId} created with policy {PolicyId}", scan.Id, policyId);
 
-        // TODO: Store uploaded files somewhere (temp folder or cloud storage)
-        // For now, we just remember the filenames.
+        // Persist the uploaded file contents to disk so the background worker can scan them.
+        var scanFolder = UploadStorage.GetScanFolder(_env.ContentRootPath, scan.Id);
+        Directory.CreateDirectory(scanFolder);
+        foreach (var file in files)
+        {
+            // Strip any directory components from the client-supplied name to prevent path traversal.
+            var safeName = Path.GetFileName(file.FileName);
+            if (string.IsNullOrWhiteSpace(safeName))
+                continue;
+
+            var destination = Path.Combine(scanFolder, safeName);
+            await using var stream = System.IO.File.Create(destination);
+            await file.CopyToAsync(stream);
+        }
 
         // Return the scanId immediately — actual scanning happens in background worker
         return Ok(new { scanId = scan.Id });
