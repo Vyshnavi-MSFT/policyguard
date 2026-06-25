@@ -77,7 +77,10 @@ app.MapControllers();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
+    // EnsureCreated builds the schema directly from the model. Used instead of Migrate()
+    // because the InitialCreate migration is missing its [Migration] attribute/Designer,
+    // so EF doesn't recognize it and Migrate() would create an empty (table-less) database.
+    db.Database.EnsureCreated();
 }
 
 app.Run();

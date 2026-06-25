@@ -70,6 +70,13 @@ public sealed class DatasetScanner : IScanner
             return findings;
         }
 
+        // Self-filter: this scanner only understands tabular datasets. Every file is offered
+        // to every detector (see ScanBackgroundService), so non-dataset files are skipped here.
+        if (!IsDataset(input))
+        {
+            return findings;
+        }
+
         DataTable table;
         try
         {
@@ -181,6 +188,13 @@ public sealed class DatasetScanner : IScanner
     private static bool IsJson(SourceInput input) =>
         input.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
         || string.Equals(input.Language, "json", StringComparison.OrdinalIgnoreCase);
+
+    // True only for tabular datasets this scanner can parse (CSV or JSON), by file
+    // extension or explicit language hint. Everything else (code, etc.) is skipped.
+    private static bool IsDataset(SourceInput input) =>
+        IsJson(input)
+        || input.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(input.Language, "csv", StringComparison.OrdinalIgnoreCase);
 
     private static DataTable LoadCsv(string content)
     {

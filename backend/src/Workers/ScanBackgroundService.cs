@@ -117,7 +117,9 @@ public class ScanBackgroundService : BackgroundService
     }
 
     /// <summary>
-    /// Reads every uploaded file for the scan and runs the code scanners over it.
+    /// Reads every uploaded file for the scan and offers it to every detector. Each scanner
+    /// self-filters to the inputs it understands (CodeScanner: regex on all files + Roslyn on
+    /// C#; DatasetScanner: CSV/JSON only), so the worker stays agnostic to file types.
     /// Stamps the ScanId (which the scanners don't know) onto each resulting finding.
     /// </summary>
     private async Task<List<Finding>> RunDetectors(Scan scan, CancellationToken ct)
@@ -130,6 +132,8 @@ public class ScanBackgroundService : BackgroundService
             _logger.LogWarning("No uploaded files found for scan {ScanId} at {Folder}", scan.Id, scanFolder);
             return findings;
         }
+
+        var detectors = new IScanner[] { _codeScanner, _datasetScanner };
 
         foreach (var path in Directory.EnumerateFiles(scanFolder))
         {
@@ -150,26 +154,22 @@ public class ScanBackgroundService : BackgroundService
 
             var input = new SourceInput(fileName, content, GuessLanguage(fileName));
 
-            // Route datasets (CSV/JSON) to the dataset scanner; code files to the code scanner.
-            var fileFindings = IsDataset(fileName)
-                ? await _datasetScanner.ScanAsync(input, ct)
-                : await _codeScanner.ScanAsync(input, ct);
-
-            foreach (var finding in fileFindings)
+            // Every detector sees every file; each self-filters to what it can handle.
+            foreach (var detector in detectors)
             {
-                finding.ScanId = scan.Id;
-            }
+                var fileFindings = await detector.ScanAsync(input, ct);
+                foreach (var finding in fileFindings)
+                {
+                    finding.ScanId = scan.Id;
+                }
 
-            findings.AddRange(fileFindings);
+                findings.AddRange(fileFindings);
+            }
         }
 
         _logger.LogInformation("Detection produced {Count} findings for scan {ScanId}", findings.Count, scan.Id);
         return findings;
     }
-
-    /// <summary>True for dataset files handled by the DatasetScanner (Person D).</summary>
-    private static bool IsDataset(string fileName) =>
-        Path.GetExtension(fileName).ToLowerInvariant() is ".csv" or ".json";
 
     /// <summary>Maps a file extension to a language hint for the scanners.</summary>
     private static string? GuessLanguage(string fileName)
