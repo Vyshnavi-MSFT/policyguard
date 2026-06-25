@@ -6,9 +6,9 @@
 using System;
 using System.Security.Cryptography;
 using System.Text;
-using PolicyGuard.Api.Models;
+using PolicyGuard.Models;
 
-namespace PolicyGuard.Api.Actions;
+namespace PolicyGuard.Actions;
 
 public static class AnonymizeColumn
 {

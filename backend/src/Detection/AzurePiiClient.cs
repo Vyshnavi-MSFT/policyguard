@@ -40,7 +40,7 @@ public sealed class AzurePiiOptions
 
 public sealed class AzurePiiClient
 {
-    public const string DetectedBy = "azure-pii";
+    public const string DetectedBy = "AZURE";
 
     private readonly HttpClient _http;
     private readonly AzurePiiOptions _options;

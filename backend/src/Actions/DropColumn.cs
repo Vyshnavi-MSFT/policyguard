@@ -3,9 +3,9 @@
 // Used for data that cannot be salvaged, e.g. an SSN column under GDPR Art. 9.
 // Must be unit-tested.
 using System;
-using PolicyGuard.Api.Models;
+using PolicyGuard.Models;
 
-namespace PolicyGuard.Api.Actions;
+namespace PolicyGuard.Actions;
 
 public static class DropColumn
 {
