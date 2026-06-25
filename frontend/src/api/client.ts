@@ -53,16 +53,104 @@ export interface ScanResult {
 
 export interface StartScanInput {
   files?: File[]
-  repoUrl?: string
 }
 
-// Toggle to false once the live backend is wired up.
-const USE_MOCK = true
+// Toggle to true to run the whole UI on mock data ("fake AI mode") with no backend.
+const USE_MOCK = false
 const API_BASE = '/api'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-// POST /api/scan — always scans every policy set (GDPR, HIPAA, Secrets).
+// ---- Backend <-> frontend shape mapping ------------------------------------------
+// The backend speaks the C# contract (UPPERCASE statuses, fixTool/fixArgs strings);
+// these helpers translate a raw API response into the typed shapes above.
+
+const FIX_TOOL_MAP: Record<string, FixTool> = {
+  MASK_COLUMN: 'MaskColumn',
+  DROP_COLUMN: 'DropColumn',
+  ANONYMIZE_COLUMN: 'AnonymizeColumn',
+  REDACT_CODE_LINE: 'RedactCodeLine',
+}
+
+function sourceTypeOf(fileOrLocation: string): SourceType {
+  const file = (fileOrLocation || '').toLowerCase().split(':')[0]
+  return file.endsWith('.csv') || file.endsWith('.json') ? 'dataset' : 'code'
+}
+
+function scanStatusOf(s: string): ScanStatus {
+  switch ((s || '').toUpperCase()) {
+    case 'DONE':
+    case 'ERROR':
+      return 'done'
+    case 'SCANNING':
+      return 'running'
+    default:
+      return 'pending'
+  }
+}
+
+function findingStatusOf(s: string): FindingStatus {
+  switch ((s || '').toUpperCase()) {
+    case 'APPROVED':
+      return 'approved'
+    case 'REJECTED':
+      return 'rejected'
+    default:
+      return 'pending'
+  }
+}
+
+function parseFixArgs(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== 'string') return {}
+  try {
+    const obj = JSON.parse(raw)
+    const out: Record<string, string> = {}
+    for (const [k, v] of Object.entries(obj ?? {})) out[k] = String(v)
+    return out
+  } catch {
+    return {}
+  }
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function mapFinding(f: any): Finding {
+  const location: string = f.location ?? ''
+  return {
+    id: f.id,
+    sourceType: sourceTypeOf(location),
+    location,
+    snippet: f.snippet ?? '',
+    dataType: f.dataType ?? '',
+    severity: (f.severity ?? 'MEDIUM') as Severity,
+    policyClauseId: f.policyClauseId ?? '',
+    policyClauseText: f.policyClauseText ?? '',
+    explanation: f.explanation ?? '',
+    proposedFix: {
+      tool: FIX_TOOL_MAP[(f.fixTool ?? '').toUpperCase()] ?? 'RedactCodeLine',
+      args: parseFixArgs(f.fixArgs),
+    },
+    detectedBy: f.detectedBy ?? '',
+    status: findingStatusOf(f.status),
+  }
+}
+
+function mapScan(data: any): ScanResult {
+  return {
+    scanId: data.id,
+    status: scanStatusOf(data.status),
+    complianceScore: data.complianceScore ?? 0,
+    files: (data.files ?? []).map((file: any) => ({
+      path: file.path,
+      sourceType: sourceTypeOf(file.path),
+      content: file.content ?? '',
+    })),
+    findings: (data.findings ?? []).map(mapFinding),
+  }
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+// POST /api/scan — scans every policy set (GDPR, HIPAA, Secrets); the backend reasons
+// across all of them when policyId is not one specific framework.
 // Policy filtering happens client-side on the results page (Change #1).
 export async function startScan(input: StartScanInput): Promise<{ scanId: string }> {
   if (USE_MOCK) {
@@ -70,8 +158,8 @@ export async function startScan(input: StartScanInput): Promise<{ scanId: string
     return { scanId: mockScan.scanId }
   }
   const form = new FormData()
+  form.append('policyId', 'ALL')
   input.files?.forEach((f) => form.append('files', f))
-  if (input.repoUrl) form.append('repoUrl', input.repoUrl)
   const res = await fetch(`${API_BASE}/scan`, { method: 'POST', body: form })
   if (!res.ok) throw new Error(`startScan failed: ${res.status}`)
   return res.json()
@@ -85,7 +173,7 @@ export async function getScan(scanId: string): Promise<ScanResult> {
   }
   const res = await fetch(`${API_BASE}/scan/${scanId}`)
   if (!res.ok) throw new Error(`getScan failed: ${res.status}`)
-  return res.json()
+  return mapScan(await res.json())
 }
 
 // Poll until the scan is done (the backend runs detection + AI in the background).

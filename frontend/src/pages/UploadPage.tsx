@@ -1,5 +1,5 @@
 // pages/UploadPage.tsx — Person A
-// Entry point: drag-and-drop code/JSON/CSV files or paste a Git repo URL, then scan.
+// Entry point: drag-and-drop code/JSON/CSV files, then scan.
 // A scan always covers every policy set (GDPR, HIPAA, Secrets) — there is no policy
 // picker here (Change #1); policy filtering happens on the results page.
 
@@ -13,7 +13,6 @@ interface Props {
 
 export default function UploadPage({ onScanComplete }: Props) {
   const [files, setFiles] = useState<File[]>([])
-  const [repoUrl, setRepoUrl] = useState('')
   const [dragging, setDragging] = useState(false)
   const [scanning, setScanning] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -27,7 +26,7 @@ export default function UploadPage({ onScanComplete }: Props) {
     if (scanning) return
     setScanning(true)
     try {
-      const { scanId } = await startScan({ files, repoUrl: repoUrl.trim() || undefined })
+      const { scanId } = await startScan({ files })
       const scan = await pollScan(scanId)
       onScanComplete(scan)
     } catch (err) {
@@ -36,7 +35,7 @@ export default function UploadPage({ onScanComplete }: Props) {
     }
   }
 
-  const canScan = (files.length > 0 || repoUrl.trim().length > 0) && !scanning
+  const canScan = files.length > 0 && !scanning
 
   return (
     <main className="pg-main">
@@ -83,19 +82,6 @@ export default function UploadPage({ onScanComplete }: Props) {
             ))}
           </ul>
         )}
-      </div>
-
-      <div className="pg-field">
-        <label className="pg-label" htmlFor="repo">
-          …or paste a Git repo URL
-        </label>
-        <input
-          id="repo"
-          className="pg-input"
-          placeholder="https://github.com/org/repo.git"
-          value={repoUrl}
-          onChange={(e) => setRepoUrl(e.target.value)}
-        />
       </div>
 
       <button type="button" className="pg-btn pg-btn-primary pg-btn-block" disabled={!canScan} onClick={handleScan}>

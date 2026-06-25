@@ -36,22 +36,38 @@ public sealed class ScanOrchestrator
     /// the LLM-proposed (human-approvable) fix. Modifies the Finding objects in place; the
     /// caller is responsible for persisting them.
     /// </summary>
+    /// <summary>Maximum number of findings reasoned about concurrently (bounds Azure OpenAI load).</summary>
+    private const int MaxConcurrency = 5;
+
     public async Task ReasonAsync(Scan scan, IReadOnlyList<Finding> findings, CancellationToken ct = default)
     {
         await _policyStore.InitializeAsync(ct);
 
         var policyName = ResolvePolicyName(scan.PolicyId);
 
-        foreach (var finding in findings)
+        // Each finding is reasoned about independently and mutated in place, so we fan the calls
+        // out concurrently (bounded) instead of awaiting them one-by-one. Reasoning a single
+        // finding can take several seconds against a reasoning model, so a sequential loop makes
+        // a multi-finding scan appear to hang.
+        using var throttle = new SemaphoreSlim(MaxConcurrency);
+        var tasks = findings.Select(async finding =>
         {
-            ct.ThrowIfCancellationRequested();
+            await throttle.WaitAsync(ct);
+            try
+            {
+                var query = BuildQuery(finding);
+                var clause = await _policyStore.RetrieveAsync(query, policyName, ct);
+                var result = await _reasoner.ReasonAsync(finding, clause, ct);
 
-            var query = BuildQuery(finding);
-            var clause = await _policyStore.RetrieveAsync(query, policyName, ct);
-            var result = await _reasoner.ReasonAsync(finding, clause, ct);
+                ApplyResult(finding, clause, result);
+            }
+            finally
+            {
+                throttle.Release();
+            }
+        });
 
-            ApplyResult(finding, clause, result);
-        }
+        await Task.WhenAll(tasks);
 
         _logger.LogInformation(
             "ScanOrchestrator reasoned over {Count} findings for scan {ScanId} (policy store mock={PolicyMock}, reasoner mock={ReasonerMock}).",
