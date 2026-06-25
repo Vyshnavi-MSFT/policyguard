@@ -4,8 +4,8 @@
 // human-in-the-loop approval panel.
 
 import { useMemo, useState } from 'react'
-import type { Finding, PolicyId, ScanResult, Severity } from '../api/client'
-import { approveFinding, policyOf, reportUrl } from '../api/client'
+import type { Finding, PolicyId, ScanFile, ScanResult, Severity } from '../api/client'
+import { approveFinding, getScan, policyOf } from '../api/client'
 import ScoreGauge, { type SeverityFilter } from '../components/ScoreGauge'
 import PolicySelector from '../components/PolicySelector'
 import FindingsList from '../components/FindingsList'
@@ -35,6 +35,9 @@ function computeScore(findings: Finding[]): number {
 
 export default function ResultsPage({ scan, onNewScan }: Props) {
   const [findings, setFindings] = useState<Finding[]>(scan.findings)
+  // Uploaded file contents, refreshed after each approval so the source view
+  // (and the "Download fixed file" export) reflect the fixes the backend applied.
+  const [files, setFiles] = useState<ScanFile[]>(scan.files)
   const [severity, setSeverity] = useState<SeverityFilter>('ALL')
   const [policies, setPolicies] = useState<PolicyId[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(scan.findings[0]?.id ?? null)
@@ -69,6 +72,37 @@ export default function ResultsPage({ scan, onNewScan }: Props) {
     setFindings((prev) => prev.map((f) => (f.id === id ? { ...f, status } : f)))
   }
 
+  // Re-read the uploaded files from the backend so the source view shows the
+  // fix that was just applied (masked/dropped column, redacted line, ...).
+  async function refreshFiles() {
+    try {
+      const fresh = await getScan(scan.scanId)
+      setFiles(fresh.files)
+    } catch {
+      // Non-fatal: keep showing the last known content.
+    }
+  }
+
+  async function handleResolved(id: string, status: Finding['status']) {
+    setStatus(id, status)
+    if (status === 'approved') await refreshFiles()
+  }
+
+  // Download the current (fix-applied) version of each uploaded file.
+  function downloadFixedFiles() {
+    files.forEach((file) => {
+      const blob = new Blob([file.content], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `fixed-${file.path}`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    })
+  }
+
   async function approveAllHigh() {
     const targets = findings.filter(
       (f) => f.status === 'pending' && (f.severity === 'HIGH' || f.severity === 'CRITICAL'),
@@ -81,6 +115,7 @@ export default function ResultsPage({ scan, onNewScan }: Props) {
         targets.some((t) => t.id === f.id) ? { ...f, status: 'approved' as const } : f,
       ),
     )
+    await refreshFiles()
   }
 
   function undoApproveAll() {
@@ -112,9 +147,14 @@ export default function ResultsPage({ scan, onNewScan }: Props) {
               Approve all High+
             </button>
           )}
-          <a className="pg-btn pg-btn-primary" href={reportUrl(scan.scanId)} download>
-            Download report
-          </a>
+          <button
+            type="button"
+            className="pg-btn pg-btn-primary"
+            onClick={downloadFixedFiles}
+            disabled={files.length === 0}
+          >
+            Download fixed {files.length > 1 ? 'files' : 'file'}
+          </button>
         </div>
       </div>
 
@@ -132,7 +172,7 @@ export default function ResultsPage({ scan, onNewScan }: Props) {
           <p className="pg-section-title">Findings</p>
           <div className="pg-code-scroll">
             <FindingsList
-              files={scan.files}
+              files={files}
               findings={filtered}
               selectedId={selectedId}
               onSelect={setSelectedId}
@@ -141,7 +181,7 @@ export default function ResultsPage({ scan, onNewScan }: Props) {
         </section>
 
         <section className="pg-review-col">
-          <ApprovalQueue finding={selected} onResolved={setStatus} />
+          <ApprovalQueue finding={selected} onResolved={handleResolved} />
         </section>
       </div>
     </main>
