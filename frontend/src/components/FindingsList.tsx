@@ -29,10 +29,16 @@ export default function FindingsList({ files, findings, selectedId, onSelect }: 
         const fileFindings = findings.filter(
           (f) => parseLocation(f.location).file === file.path,
         )
+        // Render as a column table only when the findings are column-based
+        // (CSV / array-of-objects JSON). Config-style JSON and code produce
+        // line-based findings, so they render in the line-numbered code view.
+        const isTabular = fileFindings.some(
+          (f) => parseLocation(f.location).column != null,
+        )
         return (
           <div className="pg-sourcefile" key={file.path}>
             <div className="pg-sourcefile-name">{file.path}</div>
-            {file.sourceType === 'dataset' ? (
+            {isTabular ? (
               <DatasetView
                 file={file}
                 findings={fileFindings}
@@ -89,7 +95,12 @@ function CodeView({ file, findings, selectedId, onSelect }: Omit<Props, 'files'>
 }
 
 function DatasetView({ file, findings, selectedId, onSelect }: Omit<Props, 'files'> & { file: ScanFile }) {
-  const rows = file.content.split('\n').map((r) => r.split(','))
+  // Drop blank lines (e.g. a trailing newline) so the table doesn't render a
+  // stray empty row.
+  const rows = file.content
+    .split('\n')
+    .filter((r) => r.trim() !== '')
+    .map((r) => r.split(','))
   const header = rows[0] ?? []
   const body = rows.slice(1)
 

@@ -222,7 +222,8 @@ export function reportUrl(scanId: string): string {
 export function policyOf(f: Finding): PolicyId {
   const prefix = f.policyClauseId.split('-')[0]?.toUpperCase()
   if (prefix === 'HIPAA') return 'HIPAA'
-  if (prefix === 'SECRETS' || prefix === 'SECRET') return 'Secrets'
+  // Secrets clauses are prefixed "SEC-..." (e.g. SEC-001-HardcodedApiKey).
+  if (prefix === 'SEC' || prefix === 'SECRETS' || prefix === 'SECRET') return 'Secrets'
   return 'GDPR'
 }
 

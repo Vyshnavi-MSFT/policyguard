@@ -14,8 +14,6 @@ interface Props {
 }
 
 export default function PolicySelector({ available, selected, onChange }: Props) {
-  const policies = ALL_POLICIES.filter((p) => available.includes(p))
-
   function toggle(p: PolicyId) {
     if (selected.includes(p)) onChange(selected.filter((x) => x !== p))
     else onChange([...selected, p])
@@ -33,16 +31,23 @@ export default function PolicySelector({ available, selected, onChange }: Props)
       >
         All
       </button>
-      {policies.map((p) => (
-        <button
-          key={p}
-          type="button"
-          className={`pg-policy-pill${selected.includes(p) ? ' is-active' : ''}`}
-          onClick={() => toggle(p)}
-        >
-          {p}
-        </button>
-      ))}
+      {ALL_POLICIES.map((p) => {
+        const hasFindings = available.includes(p)
+        return (
+          <button
+            key={p}
+            type="button"
+            className={`pg-policy-pill${selected.includes(p) ? ' is-active' : ''}${
+              hasFindings ? '' : ' is-empty'
+            }`}
+            onClick={() => toggle(p)}
+            disabled={!hasFindings}
+            title={hasFindings ? undefined : `No ${p} findings in this scan`}
+          >
+            {p}
+          </button>
+        )
+      })}
     </div>
   )
 }
