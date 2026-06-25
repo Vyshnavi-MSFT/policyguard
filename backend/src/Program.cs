@@ -31,6 +31,13 @@ builder.Services.AddSingleton<PolicyStore>();
 builder.Services.AddSingleton<LlmReasoner>();
 builder.Services.AddSingleton<ScanOrchestrator>();
 
+// Dataset detection (Person D): Azure AI Language PII client + dataset scanner.
+// AzurePiiOptions.FromEnvironment() reads AZURE_LANGUAGE_* (loaded by DotEnv above);
+// the client falls back to offline fake-mode when no endpoint/key is configured.
+builder.Services.AddSingleton(AzurePiiOptions.FromEnvironment());
+builder.Services.AddSingleton(sp => new AzurePiiClient(new HttpClient(), sp.GetRequiredService<AzurePiiOptions>()));
+builder.Services.AddSingleton<DatasetScanner>();
+
 // ===== Background Services =====
 builder.Services.AddHostedService<ScanBackgroundService>();
 

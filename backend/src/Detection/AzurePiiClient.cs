@@ -13,7 +13,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace PolicyGuard.Api.Detection;
+namespace PolicyGuard.Detection;
 
 /// <summary>A single piece of PII detected in some text.</summary>
 public sealed record PiiEntity(string Text, string Category, double ConfidenceScore);

@@ -23,6 +23,7 @@ public class ScanBackgroundService : BackgroundService
     private readonly ILogger<ScanBackgroundService> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly CodeScanner _codeScanner;
+    private readonly DatasetScanner _datasetScanner;
     private readonly IWebHostEnvironment _env;
     private static readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(5);
 
@@ -30,11 +31,13 @@ public class ScanBackgroundService : BackgroundService
         ILogger<ScanBackgroundService> logger,
         IServiceProvider serviceProvider,
         CodeScanner codeScanner,
+        DatasetScanner datasetScanner,
         IWebHostEnvironment env)
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
         _codeScanner = codeScanner;
+        _datasetScanner = datasetScanner;
         _env = env;
     }
 
@@ -84,8 +87,8 @@ public class ScanBackgroundService : BackgroundService
             scan.Status = "SCANNING";
             await db.SaveChangesAsync(ct);
 
-            // ===== Run detectors (Person C — code scanning) =====
-            var findings = await RunCodeScanners(scan, ct);
+            // ===== Run detectors (Person C — code; Person D — datasets) =====
+            var findings = await RunDetectors(scan, ct);
             db.Findings.AddRange(findings);
             await db.SaveChangesAsync(ct);
 
@@ -117,7 +120,7 @@ public class ScanBackgroundService : BackgroundService
     /// Reads every uploaded file for the scan and runs the code scanners over it.
     /// Stamps the ScanId (which the scanners don't know) onto each resulting finding.
     /// </summary>
-    private async Task<List<Finding>> RunCodeScanners(Scan scan, CancellationToken ct)
+    private async Task<List<Finding>> RunDetectors(Scan scan, CancellationToken ct)
     {
         var findings = new List<Finding>();
         var scanFolder = UploadStorage.GetScanFolder(_env.ContentRootPath, scan.Id);
@@ -146,7 +149,11 @@ public class ScanBackgroundService : BackgroundService
             }
 
             var input = new SourceInput(fileName, content, GuessLanguage(fileName));
-            var fileFindings = await _codeScanner.ScanAsync(input, ct);
+
+            // Route datasets (CSV/JSON) to the dataset scanner; code files to the code scanner.
+            var fileFindings = IsDataset(fileName)
+                ? await _datasetScanner.ScanAsync(input, ct)
+                : await _codeScanner.ScanAsync(input, ct);
 
             foreach (var finding in fileFindings)
             {
@@ -159,6 +166,10 @@ public class ScanBackgroundService : BackgroundService
         _logger.LogInformation("Detection produced {Count} findings for scan {ScanId}", findings.Count, scan.Id);
         return findings;
     }
+
+    /// <summary>True for dataset files handled by the DatasetScanner (Person D).</summary>
+    private static bool IsDataset(string fileName) =>
+        Path.GetExtension(fileName).ToLowerInvariant() is ".csv" or ".json";
 
     /// <summary>Maps a file extension to a language hint for the scanners.</summary>
     private static string? GuessLanguage(string fileName)
