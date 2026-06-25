@@ -3,9 +3,9 @@
 // "partial" (default) keeps a hint: john@gmail.com -> j***@gmail.com, John -> J***.
 // "full" replaces the whole value with ***. Must be unit-tested.
 using System;
-using PolicyGuard.Api.Models;
+using PolicyGuard.Models;
 
-namespace PolicyGuard.Api.Actions;
+namespace PolicyGuard.Actions;
 
 public static class MaskColumn
 {

@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PolicyGuard.Api.Models;
+namespace PolicyGuard.Models;
 
 public sealed class DataTable
 {

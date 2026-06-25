@@ -5,7 +5,7 @@
 using System;
 using System.IO;
 
-namespace PolicyGuard.Api.Actions;
+namespace PolicyGuard.Actions;
 
 public static class RedactCodeLine
 {
