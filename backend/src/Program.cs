@@ -1,8 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using PolicyGuard.Agent;
 using PolicyGuard.Data;
 using PolicyGuard.Workers;
 
-var builder = WebApplicationBuilder.CreateBuilder(args);
+// Load backend/.env (if present) so Azure OpenAI keys are available to PolicyStore/LlmReasoner.
+DotEnv.Load();
+
+var builder = WebApplication.CreateBuilder(args);
 
 // ===== Database (EF Core + SQLite) =====
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
@@ -14,6 +18,12 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // ===== Dependency Injection =====
 // Controllers are auto-registered by AddControllers
+
+// Person F: policy store (embeddings + retrieval), LLM reasoner, and the reasoning orchestrator.
+// Singletons so the policy corpus is loaded/embedded only once for the process lifetime.
+builder.Services.AddSingleton<PolicyStore>();
+builder.Services.AddSingleton<LlmReasoner>();
+builder.Services.AddSingleton<ScanOrchestrator>();
 
 // ===== Background Services =====
 builder.Services.AddHostedService<ScanBackgroundService>();

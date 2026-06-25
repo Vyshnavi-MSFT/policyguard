@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using PolicyGuard.Agent;
 using PolicyGuard.Data;
 using PolicyGuard.Models;
 using System;
@@ -80,16 +81,11 @@ public class ScanBackgroundService : BackgroundService
             db.Findings.AddRange(mockFindings);
             await db.SaveChangesAsync(ct);
 
-            // ===== STUB: Call AI reasoner =====
-            // In real implementation, call Person F's AI reasoning
-            // For now, just populate some stub data
-            foreach (var finding in mockFindings)
-            {
-                finding.Severity = "HIGH";
-                finding.PolicyClauseId = "GDPR-Art5-1c";
-                finding.Explanation = "Personal data detected. This violates data minimization principles.";
-                finding.Status = "PENDING_REVIEW";
-            }
+            // ===== Call AI reasoning (Person F) =====
+            // Retrieve the relevant policy clause and ask the LLM to reason about each finding,
+            // attaching the citation + a human-approvable proposed fix. Offline-safe (mock mode).
+            var orchestrator = _serviceProvider.GetRequiredService<ScanOrchestrator>();
+            await orchestrator.ReasonAsync(scan, mockFindings, ct);
             await db.SaveChangesAsync(ct);
 
             // Mark scan as done
