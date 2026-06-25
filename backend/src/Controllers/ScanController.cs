@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PolicyGuard.Agent;
 using PolicyGuard.Data;
 using PolicyGuard.Models;
 using PolicyGuard.Storage;
@@ -16,12 +17,14 @@ public class ScanController : ControllerBase
     private readonly AppDbContext _db;
     private readonly ILogger<ScanController> _logger;
     private readonly IWebHostEnvironment _env;
+    private readonly PolicyStore _policyStore;
 
-    public ScanController(AppDbContext db, ILogger<ScanController> logger, IWebHostEnvironment env)
+    public ScanController(AppDbContext db, ILogger<ScanController> logger, IWebHostEnvironment env, PolicyStore policyStore)
     {
         _db = db;
         _logger = logger;
         _env = env;
+        _policyStore = policyStore;
     }
 
     /// <summary>
@@ -38,8 +41,14 @@ public class ScanController : ControllerBase
         if (files == null || files.Count == 0)
             return BadRequest("At least one file is required");
 
-        // Verify the policy exists (stub for now — Person F will load real policies)
-        // TODO: var policy = await _db.Policies.FirstOrDefaultAsync(p => p.Name == policyId);
+        // Verify the selected policy actually exists before queuing a scan, so an unknown
+        // policyId fails fast here instead of silently yielding findings with no citation.
+        var policies = await _policyStore.GetPoliciesAsync();
+        if (!policies.Any(p => string.Equals(p.Name, policyId, StringComparison.OrdinalIgnoreCase)))
+        {
+            var available = string.Join(", ", policies.Select(p => p.Name));
+            return BadRequest($"Unknown policyId '{policyId}'. Available policies: {available}.");
+        }
 
         // Create a Scan entry
         var scan = new Scan
@@ -117,46 +126,4 @@ public class ScanController : ControllerBase
             }).ToList()
         });
     }
-
-    /// <summary>
-    /// PATCH /api/findings/{id}
-    /// User approves or rejects a finding.
-    /// If approved, the fix gets queued to run (Person D will execute it).
-    /// </summary>
-    [HttpPatch("findings/{id}")]
-    public async Task<IActionResult> ApproveFinding(string id, [FromBody] ApproveFindingRequest request)
-    {
-        var finding = await _db.Findings.FirstOrDefaultAsync(f => f.Id == id);
-        if (finding == null)
-            return NotFound();
-
-        if (request.Action == "APPROVE")
-        {
-            finding.Status = "APPROVED";
-            finding.ApprovedBy = request.ApprovedBy ?? "system";
-            finding.ApprovedAt = DateTime.UtcNow;
-            _logger.LogInformation("Finding {FindingId} approved", id);
-        }
-        else if (request.Action == "REJECT")
-        {
-            finding.Status = "REJECTED";
-            _logger.LogInformation("Finding {FindingId} rejected", id);
-        }
-        else
-        {
-            return BadRequest("Action must be APPROVE or REJECT");
-        }
-
-        await _db.SaveChangesAsync();
-
-        // TODO: If approved, queue the fix to be executed by Person D's fix functions
-
-        return Ok(new { status = finding.Status });
-    }
-}
-
-public class ApproveFindingRequest
-{
-    public string? Action { get; set; }
-    public string? ApprovedBy { get; set; }
 }
