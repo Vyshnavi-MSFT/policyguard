@@ -8,11 +8,18 @@
 // works without network access. The LLM/embedding model never sees raw scanned data here —
 // only the policy text and the short query the orchestrator builds from a Finding.
 
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Azure;
 using Azure.AI.OpenAI;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using PolicyGuard.Data;
+using PolicyGuard.Models;
 
 namespace PolicyGuard.Agent;
 
@@ -51,6 +58,7 @@ public sealed record PolicySummary(string Name, int ClauseCount);
 public sealed class PolicyStore
 {
     private readonly ILogger<PolicyStore> _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly string? _endpoint;
     private readonly string? _apiKey;
     private readonly string? _embeddingDeployment;
@@ -61,9 +69,10 @@ public sealed class PolicyStore
     private OpenAIClient? _client;
     private bool _initialized;
 
-    public PolicyStore(IConfiguration configuration, ILogger<PolicyStore> logger)
+    public PolicyStore(IConfiguration configuration, ILogger<PolicyStore> logger, IServiceScopeFactory scopeFactory)
     {
         _logger = logger;
+        _scopeFactory = scopeFactory;
         _endpoint = configuration["AZURE_OPENAI_ENDPOINT"];
         _apiKey = configuration["AZURE_OPENAI_API_KEY"];
         _embeddingDeployment = configuration["AZURE_OPENAI_EMBEDDING_DEPLOYMENT"];
@@ -114,32 +123,35 @@ public sealed class PolicyStore
 
             LoadClausesFromDisk();
 
-            if (!_useMock)
+            try
             {
-                try
+                if (!_useMock)
                 {
                     _client = new OpenAIClient(new Uri(_endpoint!), new AzureKeyCredential(_apiKey!));
-                    foreach (var clause in _clauses)
-                    {
-                        ct.ThrowIfCancellationRequested();
-                        clause.Embedding = await EmbedAsync(clause.SearchText, ct);
-                    }
-                    _logger.LogInformation("PolicyStore embedded {Count} clauses via Azure OpenAI.", _clauses.Count);
                 }
-                catch (Exception ex)
+
+                // Seed the Policy/PolicyClause tables and (in real mode) reuse any embeddings
+                // already persisted there, only embedding clauses that are new or whose text changed.
+                await SyncWithDatabaseAsync(embed: !_useMock, ct);
+
+                if (_useMock)
                 {
-                    _logger.LogWarning(ex, "PolicyStore embedding failed; falling back to keyword matching.");
-                    foreach (var clause in _clauses)
-                    {
-                        clause.Embedding = null;
-                    }
+                    _logger.LogInformation(
+                        "PolicyStore running in mock mode (no Azure OpenAI embedding config); {Count} clauses loaded.",
+                        _clauses.Count);
                 }
             }
-            else
+            catch (OperationCanceledException)
             {
-                _logger.LogInformation(
-                    "PolicyStore running in mock mode (no Azure OpenAI embedding config); {Count} clauses loaded.",
-                    _clauses.Count);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "PolicyStore initialization failed; falling back to in-memory keyword matching.");
+                foreach (var clause in _clauses)
+                {
+                    clause.Embedding = null;
+                }
             }
 
             _initialized = true;
@@ -209,6 +221,144 @@ public sealed class PolicyStore
         var options = new EmbeddingsOptions(_embeddingDeployment, new[] { text });
         Response<Embeddings> response = await _client!.GetEmbeddingsAsync(options, ct);
         return response.Value.Data[0].Embedding.ToArray();
+    }
+
+    /// <summary>
+    /// Seeds the Policy/PolicyClause tables from the loaded clauses and, when <paramref name="embed"/>
+    /// is true, fills each clause's in-memory embedding — reusing the vector persisted in the
+    /// database when its cached content hash still matches, and only calling Azure OpenAI for
+    /// clauses that are new or whose text has changed. Newly computed vectors are written back so
+    /// subsequent process starts skip the embedding cost.
+    /// </summary>
+    private async Task SyncWithDatabaseAsync(bool embed, CancellationToken ct)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var policyByName = new Dictionary<string, Policy>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in await db.Policies.ToListAsync(ct))
+        {
+            policyByName.TryAdd(p.Name, p);
+        }
+
+        var clauseByKey = new Dictionary<(string PolicyId, string ClauseId), PolicyClause>();
+        foreach (var c in await db.PolicyClauses.ToListAsync(ct))
+        {
+            clauseByKey.TryAdd((c.PolicyId, c.ClauseId), c);
+        }
+
+        int reused = 0, embedded = 0;
+
+        foreach (var doc in _clauses)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            if (!policyByName.TryGetValue(doc.PolicyName, out var policy))
+            {
+                policy = new Policy { Name = doc.PolicyName };
+                db.Policies.Add(policy);
+                policyByName[doc.PolicyName] = policy;
+            }
+
+            if (!clauseByKey.TryGetValue((policy.Id, doc.ClauseId), out var row))
+            {
+                row = new PolicyClause
+                {
+                    PolicyId = policy.Id,
+                    ClauseId = doc.ClauseId,
+                    Title = doc.Title,
+                    FullText = doc.ClauseText,
+                };
+                db.PolicyClauses.Add(row);
+                clauseByKey[(policy.Id, doc.ClauseId)] = row;
+            }
+            else
+            {
+                row.Title = doc.Title;
+                row.FullText = doc.ClauseText;
+            }
+
+            if (!embed)
+            {
+                continue;
+            }
+
+            var hash = ContentHash(doc.SearchText);
+            var cached = TryParseEmbedding(row.EmbeddingVector, hash);
+            if (cached is not null)
+            {
+                doc.Embedding = cached;
+                reused++;
+            }
+            else
+            {
+                doc.Embedding = await EmbedAsync(doc.SearchText, ct);
+                row.EmbeddingVector = SerializeEmbedding(hash, doc.Embedding);
+                embedded++;
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        if (embed)
+        {
+            _logger.LogInformation(
+                "PolicyStore embeddings ready ({Total} clauses): {Reused} reused from database, {Embedded} newly embedded.",
+                _clauses.Count, reused, embedded);
+        }
+    }
+
+    /// <summary>Stable short hash of a clause's searchable text, used to detect text changes.</summary>
+    private static string ContentHash(string text)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(text));
+        return Convert.ToHexString(bytes, 0, 4); // 8 hex chars is plenty to spot a content change
+    }
+
+    /// <summary>Serializes an embedding for storage as "{contentHash}|f0,f1,f2,...".</summary>
+    private static string SerializeEmbedding(string contentHash, IReadOnlyList<float> vector)
+    {
+        var sb = new StringBuilder(contentHash).Append('|');
+        for (int i = 0; i < vector.Count; i++)
+        {
+            if (i > 0) sb.Append(',');
+            sb.Append(vector[i].ToString("R", CultureInfo.InvariantCulture));
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Parses a stored embedding, returning null when it is missing, malformed, or its content
+    /// hash no longer matches <paramref name="expectedHash"/> (i.e. the clause text changed).
+    /// </summary>
+    private static float[]? TryParseEmbedding(string? stored, string expectedHash)
+    {
+        if (string.IsNullOrWhiteSpace(stored))
+        {
+            return null;
+        }
+
+        int sep = stored.IndexOf('|');
+        if (sep <= 0 || !string.Equals(stored[..sep], expectedHash, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var parts = stored[(sep + 1)..].Split(',', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+        {
+            return null;
+        }
+
+        var vector = new float[parts.Length];
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (!float.TryParse(parts[i], NumberStyles.Float, CultureInfo.InvariantCulture, out vector[i]))
+            {
+                return null;
+            }
+        }
+        return vector;
     }
 
     private void LoadClausesFromDisk()
