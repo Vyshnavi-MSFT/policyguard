@@ -6,9 +6,9 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using PolicyGuard.Api.Models;
+using PolicyGuard.Models;
 
-namespace PolicyGuard.Api.Detection;
+namespace PolicyGuard.Detection;
 
 /// <summary>
 /// C#/.NET-aware scanner. Parses the source into a syntax tree and walks it to find
@@ -23,7 +23,7 @@ namespace PolicyGuard.Api.Detection;
 /// </summary>
 public sealed class RoslynScanner : IScanner
 {
-    private const string DetectedByTag = "roslyn";
+    private const string DetectedByTag = "ROSLYN";
 
     /// <inheritdoc />
     public Task<List<Finding>> ScanAsync(SourceInput input, CancellationToken cancellationToken = default)
@@ -72,20 +72,18 @@ public sealed class RoslynScanner : IScanner
     /// explanation, and the proposed fix are intentionally left blank — they are populated
     /// downstream by the LLM reasoning step (Person F).
     /// </summary>
-    private static Finding BuildFinding(string fileName, int line, int column, string snippet, string dataType) =>
-        new(
-            Id: Guid.NewGuid().ToString(),
-            SourceType: "code",
-            Location: $"{fileName}:{line}:{column}",
-            Snippet: snippet,
-            DataType: dataType,
-            Severity: "",
-            PolicyClauseId: "",
-            PolicyClauseText: "",
-            Explanation: "",
-            ProposedFix: null,
-            DetectedBy: DetectedByTag,
-            Status: "pending");
+    private static Finding BuildFinding(string fileName, int line, string snippet, string dataType) =>
+        new()
+        {
+            DataType = dataType,
+            Location = $"{fileName}:{line}",
+            Snippet = snippet,
+            DetectedBy = DetectedByTag,
+            Status = "PENDING_REVIEW",
+            // Id defaults to a new GUID. ScanId is assigned by the orchestrator before saving.
+            // Severity (defaults to MEDIUM), PolicyClauseId/Text, Explanation, and FixTool/FixArgs
+            // are filled in downstream by the LLM reasoning step (Person F).
+        };
 
     /// <summary>
     /// Walks the C# syntax tree collecting structural PII findings.
@@ -210,14 +208,13 @@ public sealed class RoslynScanner : IScanner
         private void AddFinding(SyntaxNode node, string dataType)
         {
             FileLinePositionSpan span = node.GetLocation().GetLineSpan();
-            int line = span.StartLinePosition.Line + 1;       // 1-based line
-            int column = span.StartLinePosition.Character + 1; // 1-based column
+            int line = span.StartLinePosition.Line + 1; // 1-based line
 
             string snippet = line >= 1 && line <= _lines.Length
                 ? _lines[line - 1].TrimEnd('\r').Trim()
                 : node.ToString();
 
-            _findings.Add(BuildFinding(_fileName, line, column, snippet, dataType));
+            _findings.Add(BuildFinding(_fileName, line, snippet, dataType));
         }
     }
 }
