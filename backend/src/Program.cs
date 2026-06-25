@@ -1,8 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using PolicyGuard.Data;
+using PolicyGuard.Detection;
 using PolicyGuard.Workers;
 
-var builder = WebApplicationBuilder.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 // ===== Database (EF Core + SQLite) =====
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
@@ -14,6 +15,11 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // ===== Dependency Injection =====
 // Controllers are auto-registered by AddControllers
+
+// Detection scanners (Person C). Stateless, so registered as singletons.
+builder.Services.AddSingleton<RegexScanner>();
+builder.Services.AddSingleton<RoslynScanner>();
+builder.Services.AddSingleton<CodeScanner>();
 
 // ===== Background Services =====
 builder.Services.AddHostedService<ScanBackgroundService>();

@@ -20,9 +20,23 @@
     <!-- Azure SDKs -->
     <PackageReference Include="Azure.AI.OpenAI" Version="1.0.0-beta.10" />
     <PackageReference Include="Azure.AI.Language.Text" Version="1.0.0-beta.4" />
+<<<<<<< HEAD
     
+=======
+
+    <!-- Code analysis (Person C — RoslynScanner) -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.5.0" />
+
+>>>>>>> main
     <!-- Utilities -->
-    <PackageReference Include="System.Text.Json" Version="8.0.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+  <!-- The tests live in a separate project under tests/; don't compile them into the API. -->
+  <ItemGroup>
+    <Compile Remove="tests/**/*.cs" />
+    <Content Remove="tests/**/*" />
+    <None Remove="tests/**/*" />
   </ItemGroup>
 
 </Project>

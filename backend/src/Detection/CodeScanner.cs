@@ -6,9 +6,9 @@
 // Non-C# files fall back to regex-only. detected_by stays "regex" or "roslyn"
 // on each individual finding.
 
-using PolicyGuard.Api.Models;
+using PolicyGuard.Models;
 
-namespace PolicyGuard.Api.Detection;
+namespace PolicyGuard.Detection;
 
 /// <summary>
 /// Entry-point scanner for source code. Combines the language-agnostic

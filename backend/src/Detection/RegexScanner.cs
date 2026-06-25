@@ -3,9 +3,9 @@
 // Each match -> Finding with file + line + column. detected_by = "regex".
 
 using System.Text.RegularExpressions;
-using PolicyGuard.Api.Models;
+using PolicyGuard.Models;
 
-namespace PolicyGuard.Api.Detection;
+namespace PolicyGuard.Detection;
 
 /// <summary>
 /// Language-agnostic scanner that finds personal data and secrets in raw text using
@@ -15,7 +15,7 @@ namespace PolicyGuard.Api.Detection;
 /// </summary>
 public sealed partial class RegexScanner : IScanner
 {
-    private const string DetectedByTag = "regex";
+    private const string DetectedByTag = "REGEX";
 
     // --- Source-generated, compiled patterns (built at compile time for speed) ---
 
@@ -98,8 +98,7 @@ public sealed partial class RegexScanner : IScanner
                         continue; // e.g. a digit run that fails the Luhn check
                     }
 
-                    int column = match.Index + 1; // 1-based column
-                    findings.Add(BuildFinding(input.FileName, lineNumber, column, line.Trim(), rule.DataType));
+                    findings.Add(BuildFinding(input.FileName, lineNumber, line.Trim(), rule.DataType));
                 }
             }
         }
@@ -112,20 +111,18 @@ public sealed partial class RegexScanner : IScanner
     /// explanation, and the proposed fix are intentionally left blank — they are populated
     /// downstream by the LLM reasoning step (Person F).
     /// </summary>
-    private static Finding BuildFinding(string fileName, int line, int column, string snippet, string dataType) =>
-        new(
-            Id: Guid.NewGuid().ToString(),
-            SourceType: "code",
-            Location: $"{fileName}:{line}:{column}",
-            Snippet: snippet,
-            DataType: dataType,
-            Severity: "",
-            PolicyClauseId: "",
-            PolicyClauseText: "",
-            Explanation: "",
-            ProposedFix: null,
-            DetectedBy: DetectedByTag,
-            Status: "pending");
+    private static Finding BuildFinding(string fileName, int line, string snippet, string dataType) =>
+        new()
+        {
+            DataType = dataType,
+            Location = $"{fileName}:{line}",
+            Snippet = snippet,
+            DetectedBy = DetectedByTag,
+            Status = "PENDING_REVIEW",
+            // Id defaults to a new GUID. ScanId is assigned by the orchestrator before saving.
+            // Severity (defaults to MEDIUM), PolicyClauseId/Text, Explanation, and FixTool/FixArgs
+            // are filled in downstream by the LLM reasoning step (Person F).
+        };
 
     /// <summary>
     /// Validates a candidate card number with the Luhn checksum to cut false positives.
