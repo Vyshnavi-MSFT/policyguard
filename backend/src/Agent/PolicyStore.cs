@@ -41,6 +41,9 @@ public sealed record PolicyClauseMatch(
     string ClauseText,
     double Score);
 
+/// <summary>A lightweight summary of a loaded policy (used by PoliciesController).</summary>
+public sealed record PolicySummary(string Name, int ClauseCount);
+
 /// <summary>
 /// Loads, embeds, and retrieves policy clauses. Registered as a singleton so the policy
 /// corpus is embedded only once for the lifetime of the process.
@@ -75,6 +78,20 @@ public sealed class PolicyStore
 
     /// <summary>Number of policy clauses currently loaded.</summary>
     public int ClauseCount => _clauses.Count;
+
+    /// <summary>
+    /// Returns a summary of every loaded policy (distinct name + clause count). Triggers the
+    /// one-time load if it has not happened yet. Used to populate the frontend policy dropdown.
+    /// </summary>
+    public async Task<IReadOnlyList<PolicySummary>> GetPoliciesAsync(CancellationToken ct = default)
+    {
+        await InitializeAsync(ct);
+        return _clauses
+            .GroupBy(c => c.PolicyName)
+            .Select(g => new PolicySummary(g.Key, g.Count()))
+            .OrderBy(p => p.Name)
+            .ToList();
+    }
 
     /// <summary>
     /// Loads the policy JSON files and (in real mode) embeds every clause once. Safe to call

@@ -290,6 +290,9 @@ public sealed class LlmReasoner
         _ => "MEDIUM",
     };
 
+    private static readonly HashSet<string> CodeExtensions =
+        new(StringComparer.OrdinalIgnoreCase) { ".cs", ".py", ".js", ".ts", ".java" };
+
     private static bool IsCodeFinding(Finding finding)
     {
         if (string.Equals(finding.DetectedBy, "ROSLYN", StringComparison.OrdinalIgnoreCase))
@@ -297,12 +300,10 @@ public sealed class LlmReasoner
             return true;
         }
 
-        var loc = finding.Location ?? "";
-        return loc.Contains(".cs", StringComparison.OrdinalIgnoreCase)
-               || loc.Contains(".py", StringComparison.OrdinalIgnoreCase)
-               || loc.Contains(".js", StringComparison.OrdinalIgnoreCase)
-               || loc.Contains(".ts", StringComparison.OrdinalIgnoreCase)
-               || loc.Contains(".java", StringComparison.OrdinalIgnoreCase);
+        // Location is "<file>:<line|column=...>" — match on the file's extension, not a raw
+        // substring, so ".csv" datasets are not mistaken for ".cs" code files.
+        var fileName = (finding.Location ?? "").Split(':')[0];
+        return CodeExtensions.Contains(Path.GetExtension(fileName));
     }
 
     private static string DefaultFixTool(Finding finding)
