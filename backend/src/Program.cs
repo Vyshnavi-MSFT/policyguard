@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PolicyGuard.Agent;
 using PolicyGuard.Data;
+using PolicyGuard.Detection;
 using PolicyGuard.Workers;
 
 // Load backend/.env (if present) so Azure OpenAI keys are available to PolicyStore/LlmReasoner.
@@ -18,6 +19,11 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // ===== Dependency Injection =====
 // Controllers are auto-registered by AddControllers
+
+// Detection scanners (Person C). Stateless, so registered as singletons.
+builder.Services.AddSingleton<RegexScanner>();
+builder.Services.AddSingleton<RoslynScanner>();
+builder.Services.AddSingleton<CodeScanner>();
 
 // Person F: policy store (embeddings + retrieval), LLM reasoner, and the reasoning orchestrator.
 // Singletons so the policy corpus is loaded/embedded only once for the process lifetime.

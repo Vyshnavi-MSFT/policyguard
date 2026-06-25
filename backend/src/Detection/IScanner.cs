@@ -2,9 +2,9 @@
 // public interface IScanner { Task<List<Finding>> ScanAsync(SourceInput input); }
 // Implemented below: IScanner + the SourceInput record the scanners consume.
 
-using PolicyGuard.Api.Models;
+using PolicyGuard.Models;
 
-namespace PolicyGuard.Api.Detection;
+namespace PolicyGuard.Detection;
 
 /// <summary>
 /// A single unit of source to be scanned for personal data — either a code file
