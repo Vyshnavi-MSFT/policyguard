@@ -41,13 +41,17 @@ public class ScanController : ControllerBase
         if (files == null || files.Count == 0)
             return BadRequest("At least one file is required");
 
-        // Verify the selected policy actually exists before queuing a scan, so an unknown
-        // policyId fails fast here instead of silently yielding findings with no citation.
-        var policies = await _policyStore.GetPoliciesAsync();
-        if (!policies.Any(p => string.Equals(p.Name, policyId, StringComparison.OrdinalIgnoreCase)))
+        // "ALL" is a sentinel meaning "evaluate against every policy set". Otherwise verify the
+        // selected policy actually exists before queuing a scan, so an unknown policyId fails fast
+        // here instead of silently yielding findings with no citation.
+        if (!string.Equals(policyId, "ALL", StringComparison.OrdinalIgnoreCase))
         {
-            var available = string.Join(", ", policies.Select(p => p.Name));
-            return BadRequest($"Unknown policyId '{policyId}'. Available policies: {available}.");
+            var policies = await _policyStore.GetPoliciesAsync();
+            if (!policies.Any(p => string.Equals(p.Name, policyId, StringComparison.OrdinalIgnoreCase)))
+            {
+                var available = string.Join(", ", policies.Select(p => p.Name));
+                return BadRequest($"Unknown policyId '{policyId}'. Available policies: {available}.");
+            }
         }
 
         // Create a Scan entry
@@ -102,6 +106,21 @@ public class ScanController : ControllerBase
         var highCount = scan.Findings.Count(f => f.Severity == "HIGH");
         var complianceScore = Math.Max(0, 100 - (criticalCount * 20) - (highCount * 10));
 
+        // Read the (possibly fix-mutated) uploaded files so the UI can render the source
+        // with violations highlighted. Binary/unreadable files come back with empty content.
+        var scanFolder = UploadStorage.GetScanFolder(_env.ContentRootPath, scan.Id);
+        var files = new List<object>();
+        if (Directory.Exists(scanFolder))
+        {
+            foreach (var path in Directory.EnumerateFiles(scanFolder))
+            {
+                string content;
+                try { content = await System.IO.File.ReadAllTextAsync(path); }
+                catch { content = string.Empty; }
+                files.Add(new { path = Path.GetFileName(path), content });
+            }
+        }
+
         return Ok(new
         {
             scan.Id,
@@ -110,6 +129,7 @@ public class ScanController : ControllerBase
             scan.CreatedAt,
             scan.CompletedAt,
             ComplianceScore = complianceScore,
+            Files = files,
             Findings = scan.Findings.Select(f => new
             {
                 f.Id,
@@ -120,6 +140,7 @@ public class ScanController : ControllerBase
                 f.PolicyClauseId,
                 f.PolicyClauseText,
                 f.Explanation,
+                f.DetectedBy,
                 f.Status,
                 f.FixTool,
                 f.FixArgs
