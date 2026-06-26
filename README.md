@@ -10,6 +10,12 @@ Built for the Microsoft Global Intern Hackathon 2026.
 
 Anna Gornyitzki · Claire Li · Khang Nguyen · Katherine Charry · Victoria Salomon · Stephanie Hurtado
 
+<img width="500" alt="image" src="https://github.com/user-attachments/assets/f0dba8c2-6f48-4c26-a101-e5831421c762" />
+
+
+
+<img width="500" alt="image" src="https://github.com/user-attachments/assets/fc7146f1-88a1-4b42-a341-fd4e462ccdcc" />
+
 ## What PolicyGuard does
 
 - Scans CSV, JSON, and code files for privacy and security issues.
