@@ -6,11 +6,11 @@ The workflow is straightforward: upload a file, scan it against policy, review t
 
 Built for the Microsoft Global Intern Hackathon 2026.
 
+<img width="500" alt="image" src="https://github.com/user-attachments/assets/fc7146f1-88a1-4b42-a341-fd4e462ccdcc" />
+
 ## Team
 
 Anna Gornyitzki · Claire Li · Khang Nguyen · Katherine Charry · Victoria Salomon · Stephanie Hurtado
-
-<img width="500" alt="image" src="https://github.com/user-attachments/assets/fc7146f1-88a1-4b42-a341-fd4e462ccdcc" />
 
 ## What PolicyGuard does
 
