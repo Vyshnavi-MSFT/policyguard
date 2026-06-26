@@ -4,6 +4,8 @@ PolicyGuard is an AI-assisted privacy and compliance scanner for datasets and so
 
 The workflow is straightforward: upload a file, scan it against policy, review the findings, approve or reject the recommended fix, and download the cleaned output.
 
+Built for the Microsoft Global Intern Hackathon 2026.
+
 ## Team
 
 Anna Gornyitzki · Claire Li · Khang Nguyen · Katherine Charry · Victoria Salomon · Stephanie Hurtado
