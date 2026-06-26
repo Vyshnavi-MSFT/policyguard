@@ -16,6 +16,9 @@ obj/
 # Logs
 *.log
 
+# samples 
+samples/
+
 # Runtime upload storage (user-uploaded scan files)
 uploads/
 
