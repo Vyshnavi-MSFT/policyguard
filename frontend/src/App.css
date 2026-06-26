@@ -88,9 +88,10 @@ body { background: var(--pg-bg); }
   letter-spacing: 0.5px;
 }
 .pg-brand {
-  font-weight: 600;
+  height: 20px;
+  width: auto;
   color: var(--pg-text-h);
-  font-size: 17px;
+  display: block;
 }
 .pg-tagline {
   color: var(--pg-muted);

@@ -13,7 +13,33 @@ function App() {
     <div className="pg-app">
       <header className="pg-topbar">
         <span className="pg-logo">PG</span>
-        <span className="pg-brand">PolicyGuard</span>
+        <svg
+          className="pg-brand"
+          viewBox="0 0 660 78"
+          role="img"
+          aria-label="PolicyGuard"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <text
+            x="0"
+            y="58"
+            fontFamily="Arial, Helvetica, sans-serif"
+            fontSize="62"
+            fontWeight="600"
+            letterSpacing="1"
+            fill="currentColor"
+          >
+            POLICYGUARD
+          </text>
+          <path
+            d="M560 42 L584 64 L648 12"
+            stroke="currentColor"
+            strokeWidth="20"
+            strokeLinecap="square"
+            strokeLinejoin="miter"
+            fill="none"
+          />
+        </svg>
         <span className="pg-tagline">Find · explain · fix personal data</span>
       </header>
 
