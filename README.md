@@ -56,6 +56,7 @@ Anna Gornyitzki · Claire Li · Khang Nguyen · Katherine Charry · Victoria Sal
 - Git
 
 ## Local setup
+Make sure to run from `anna-embedding-persistence` branch.
 
 ### 1. Clone the repository
 
