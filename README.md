@@ -162,26 +162,6 @@ dotnet publish -c Release -o publish
 
 If these are not provided, the app falls back to deterministic offline behavior where possible.
 
-## Screenshots
-
-Add your final screenshots here before submission.
-
-### 1. Upload screen
-
-[PLACE SCREENSHOT HERE]
-
-### 2. Findings and compliance score
-
-[PLACE SCREENSHOT HERE]
-
-### 3. Approval workflow
-
-[PLACE SCREENSHOT HERE]
-
-### 4. Cleaned output download
-
-[PLACE SCREENSHOT HERE]
-
 ## API overview
 
 - `POST /api/scan` - start a scan.
