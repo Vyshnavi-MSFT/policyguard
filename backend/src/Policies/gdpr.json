@@ -1,0 +1,68 @@
+[
+  {
+    "id": "GDPR-Art5-1a",
+    "title": "Lawfulness, fairness and transparency",
+    "clauseText": "Personal data shall be processed lawfully, fairly and in a transparent manner in relation to the data subject.",
+    "exampleViolations": [
+      "collecting personal data without a lawful basis or consent",
+      "using data for purposes the individual was never told about"
+    ]
+  },
+  {
+    "id": "GDPR-Art5-1c",
+    "title": "Data minimisation",
+    "clauseText": "Personal data shall be adequate, relevant and limited to what is necessary in relation to the purposes for which they are processed.",
+    "exampleViolations": [
+      "storing full SSNs or national IDs when they are not needed",
+      "keeping raw email addresses or phone numbers in a training dataset",
+      "retaining a column of names that the model does not require"
+    ]
+  },
+  {
+    "id": "GDPR-Art5-1e",
+    "title": "Storage limitation",
+    "clauseText": "Personal data shall be kept in a form which permits identification of data subjects for no longer than is necessary for the purposes for which the personal data are processed.",
+    "exampleViolations": [
+      "retaining identifiable records indefinitely",
+      "keeping raw birth dates when a year or age range would suffice"
+    ]
+  },
+  {
+    "id": "GDPR-Art5-1f",
+    "title": "Integrity and confidentiality",
+    "clauseText": "Personal data shall be processed in a manner that ensures appropriate security of the personal data, including protection against unauthorised or unlawful processing using appropriate technical or organisational measures.",
+    "exampleViolations": [
+      "storing credit card numbers or bank accounts in plaintext",
+      "logging personal data such as emails or IP addresses to plaintext logs",
+      "transmitting sensitive fields without masking or encryption"
+    ]
+  },
+  {
+    "id": "GDPR-Art9-1",
+    "title": "Processing of special categories of personal data",
+    "clauseText": "Processing of personal data revealing racial or ethnic origin, political opinions, religious beliefs, health data, biometric data, or data concerning a person's sex life or sexual orientation shall be prohibited, save under specific conditions.",
+    "exampleViolations": [
+      "including a health, diagnosis, or biometric column in a dataset",
+      "storing race, religion, political views, or sexual orientation without an explicit lawful condition"
+    ]
+  },
+  {
+    "id": "GDPR-Art32-1",
+    "title": "Security of processing",
+    "clauseText": "Taking into account the state of the art, the controller shall implement appropriate technical and organisational measures to ensure a level of security appropriate to the risk, including the pseudonymisation and encryption of personal data.",
+    "exampleViolations": [
+      "hardcoding secrets, API keys, or passwords in source code",
+      "failing to pseudonymise or encrypt direct identifiers",
+      "sending personal data to third parties without safeguards"
+    ]
+  },
+  {
+    "id": "GDPR-Art4-5",
+    "title": "Pseudonymisation",
+    "clauseText": "Pseudonymisation means the processing of personal data in such a manner that it can no longer be attributed to a specific data subject without the use of additional information, kept separately and subject to safeguards.",
+    "exampleViolations": [
+      "keeping directly identifying values where a hashed or generalised value would remove attribution",
+      "storing usernames or device IDs that can be linked back to an individual"
+    ]
+  }
+]

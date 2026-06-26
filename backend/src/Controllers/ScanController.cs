@@ -1,0 +1,150 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using PolicyGuard.Agent;
+using PolicyGuard.Data;
+using PolicyGuard.Models;
+using PolicyGuard.Storage;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace PolicyGuard.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class ScanController : ControllerBase
+{
+    private readonly AppDbContext _db;
+    private readonly ILogger<ScanController> _logger;
+    private readonly IWebHostEnvironment _env;
+    private readonly PolicyStore _policyStore;
+
+    public ScanController(AppDbContext db, ILogger<ScanController> logger, IWebHostEnvironment env, PolicyStore policyStore)
+    {
+        _db = db;
+        _logger = logger;
+        _env = env;
+        _policyStore = policyStore;
+    }
+
+    /// <summary>
+    /// POST /api/scan
+    /// Start a new scan. Frontend uploads files, picks a policy, and gets back a scanId.
+    /// The actual scanning happens in the background.
+    /// </summary>
+    [HttpPost]
+    public async Task<IActionResult> StartScan([FromForm] string policyId, [FromForm] List<IFormFile> files)
+    {
+        if (string.IsNullOrEmpty(policyId))
+            return BadRequest("policyId is required");
+
+        if (files == null || files.Count == 0)
+            return BadRequest("At least one file is required");
+
+        // "ALL" is a sentinel meaning "evaluate against every policy set". Otherwise verify the
+        // selected policy actually exists before queuing a scan, so an unknown policyId fails fast
+        // here instead of silently yielding findings with no citation.
+        if (!string.Equals(policyId, "ALL", StringComparison.OrdinalIgnoreCase))
+        {
+            var policies = await _policyStore.GetPoliciesAsync();
+            if (!policies.Any(p => string.Equals(p.Name, policyId, StringComparison.OrdinalIgnoreCase)))
+            {
+                var available = string.Join(", ", policies.Select(p => p.Name));
+                return BadRequest($"Unknown policyId '{policyId}'. Available policies: {available}.");
+            }
+        }
+
+        // Create a Scan entry
+        var scan = new Scan
+        {
+            Id = Guid.NewGuid().ToString(),
+            PolicyId = policyId,
+            Status = "PENDING",
+            InputFileNames = string.Join(", ", files.Select(f => f.FileName))
+        };
+
+        _db.Scans.Add(scan);
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Scan {ScanId} created with policy {PolicyId}", scan.Id, policyId);
+
+        // Persist the uploaded file contents to disk so the background worker can scan them.
+        var scanFolder = UploadStorage.GetScanFolder(_env.ContentRootPath, scan.Id);
+        Directory.CreateDirectory(scanFolder);
+        foreach (var file in files)
+        {
+            // Strip any directory components from the client-supplied name to prevent path traversal.
+            var safeName = Path.GetFileName(file.FileName);
+            if (string.IsNullOrWhiteSpace(safeName))
+                continue;
+
+            var destination = Path.Combine(scanFolder, safeName);
+            await using var stream = System.IO.File.Create(destination);
+            await file.CopyToAsync(stream);
+        }
+
+        // Return the scanId immediately — actual scanning happens in background worker
+        return Ok(new { scanId = scan.Id });
+    }
+
+    /// <summary>
+    /// GET /api/scan/{id}
+    /// Poll to get the status and findings of a scan.
+    /// </summary>
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetScan(string id)
+    {
+        var scan = await _db.Scans
+            .Include(s => s.Findings)
+            .FirstOrDefaultAsync(s => s.Id == id);
+
+        if (scan == null)
+            return NotFound();
+
+        // Calculate compliance score (stub: 100 - number of critical findings * 20)
+        var criticalCount = scan.Findings.Count(f => f.Severity == "CRITICAL");
+        var highCount = scan.Findings.Count(f => f.Severity == "HIGH");
+        var complianceScore = Math.Max(0, 100 - (criticalCount * 20) - (highCount * 10));
+
+        // Read the (possibly fix-mutated) uploaded files so the UI can render the source
+        // with violations highlighted. Binary/unreadable files come back with empty content.
+        var scanFolder = UploadStorage.GetScanFolder(_env.ContentRootPath, scan.Id);
+        var files = new List<object>();
+        if (Directory.Exists(scanFolder))
+        {
+            foreach (var path in Directory.EnumerateFiles(scanFolder))
+            {
+                string content;
+                try { content = await System.IO.File.ReadAllTextAsync(path); }
+                catch { content = string.Empty; }
+                files.Add(new { path = Path.GetFileName(path), content });
+            }
+        }
+
+        return Ok(new
+        {
+            scan.Id,
+            scan.PolicyId,
+            scan.Status,
+            scan.CreatedAt,
+            scan.CompletedAt,
+            ComplianceScore = complianceScore,
+            Files = files,
+            Findings = scan.Findings.Select(f => new
+            {
+                f.Id,
+                f.DataType,
+                f.Severity,
+                f.Location,
+                f.Snippet,
+                f.PolicyClauseId,
+                f.PolicyClauseText,
+                f.Explanation,
+                f.DetectedBy,
+                f.Status,
+                f.FixTool,
+                f.FixArgs
+            }).ToList()
+        });
+    }
+}

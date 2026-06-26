@@ -1,0 +1,28 @@
+# Environment / secrets
+.env
+*.env
+!.env.example
+
+# .NET build output
+bin/
+obj/
+*.user
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
+
+# samples 
+samples/
+
+# Runtime upload storage (user-uploaded scan files)
+uploads/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vite/

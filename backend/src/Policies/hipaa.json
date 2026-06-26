@@ -1,0 +1,66 @@
+[
+  {
+    "id": "HIPAA-164.514-b2",
+    "title": "Safe Harbor de-identification",
+    "clauseText": "Protected health information is de-identified only when all 18 listed identifiers of the individual and of relatives, employers, or household members are removed, and the covered entity has no actual knowledge that the remaining information could identify the individual.",
+    "exampleViolations": [
+      "keeping any of the 18 identifiers in a dataset intended to be de-identified",
+      "releasing health records that still contain names, dates, or record numbers"
+    ]
+  },
+  {
+    "id": "HIPAA-164.514-b2-i-A",
+    "title": "Identifier: Names",
+    "clauseText": "Names of the individual or of relatives, employers, or household members must be removed for de-identification.",
+    "exampleViolations": [
+      "a patient name column alongside health data",
+      "next-of-kin or guarantor names in a medical record export"
+    ]
+  },
+  {
+    "id": "HIPAA-164.514-b2-i-C",
+    "title": "Identifier: Dates linked to an individual",
+    "clauseText": "All elements of dates (except year) directly related to an individual, including birth date, admission date, discharge date, and date of death, must be removed; ages over 89 and dates indicating such age must be aggregated.",
+    "exampleViolations": [
+      "storing exact date of birth or admission date with patient records",
+      "keeping a date of death linked to an identifiable person"
+    ]
+  },
+  {
+    "id": "HIPAA-164.514-b2-i-G",
+    "title": "Identifier: Medical record and health plan numbers",
+    "clauseText": "Medical record numbers, health plan beneficiary numbers, and account numbers must be removed for de-identification.",
+    "exampleViolations": [
+      "a medical record number (MRN) column in a dataset",
+      "health-plan beneficiary IDs stored alongside diagnoses"
+    ]
+  },
+  {
+    "id": "HIPAA-164.514-b2-i-R",
+    "title": "Identifier: Biometric and other unique identifiers",
+    "clauseText": "Biometric identifiers including finger and voice prints, full-face photographs and comparable images, and any other unique identifying number, characteristic, or code must be removed.",
+    "exampleViolations": [
+      "storing fingerprints, voiceprints, or full-face patient photos",
+      "retaining a device serial number that uniquely identifies a patient"
+    ]
+  },
+  {
+    "id": "HIPAA-164.502-b",
+    "title": "Minimum necessary",
+    "clauseText": "A covered entity must make reasonable efforts to limit protected health information to the minimum necessary to accomplish the intended purpose of the use, disclosure, or request.",
+    "exampleViolations": [
+      "including diagnosis or treatment columns not required for the analysis",
+      "exporting an entire patient record when only aggregate fields are needed"
+    ]
+  },
+  {
+    "id": "HIPAA-164.312-a1",
+    "title": "Access control and encryption",
+    "clauseText": "A covered entity must implement technical policies and procedures, including encryption and access controls, that allow access to electronic protected health information only to authorized persons or software.",
+    "exampleViolations": [
+      "storing PHI such as diagnoses in plaintext",
+      "logging protected health information to unsecured logs",
+      "sending PHI to a third party without safeguards"
+    ]
+  }
+]
