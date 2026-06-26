@@ -1,0 +1,10 @@
+inventory:
+- source: DirectOwners
+  items:
+  - id: t-annag@microsoft.com
+  - id: t-claireli@microsoft.com
+  - id: t-kcharry@microsoft.com
+  - id: t-sthurtado@microsoft.com
+  - id: t-khnguyen@microsoft.com
+  - id: t-vsalomon@microsoft.com
+  isProduction: false
