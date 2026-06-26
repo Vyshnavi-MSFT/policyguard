@@ -13,10 +13,10 @@ function riskLabel(score: number): string {
   return 'High risk'
 }
 
-function gaugeColor(score: number): string {
-  if (score >= 80) return '#16a34a'
-  if (score >= 50) return '#d4a017'
-  return '#dc2626'
+function riskClass(score: number): string {
+  if (score >= 80) return 'risk-low'
+  if (score >= 50) return 'risk-medium'
+  return 'risk-high'
 }
 
 interface Props {
@@ -38,13 +38,19 @@ export default function ScoreGauge({ score, findings, active, onChange }: Props)
     <div className="pg-card pg-score-card">
       <div className="pg-gauge" aria-label={`Compliance score ${score} of 100`}>
         <svg width="104" height="104" viewBox="0 0 104 104">
-          <circle cx="52" cy="52" r={radius} fill="none" stroke="#eef2f6" strokeWidth="9" />
+          <defs>
+            <linearGradient id="pgGaugeGradient" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#7C4DFF" />
+              <stop offset="100%" stopColor="#0BB5A5" />
+            </linearGradient>
+          </defs>
+          <circle cx="52" cy="52" r={radius} fill="none" stroke="rgba(17,24,39,0.10)" strokeWidth="9" />
           <circle
             cx="52"
             cy="52"
             r={radius}
             fill="none"
-            stroke={gaugeColor(score)}
+            stroke="url(#pgGaugeGradient)"
             strokeWidth="9"
             strokeLinecap="round"
             strokeDasharray={circ}
@@ -62,7 +68,7 @@ export default function ScoreGauge({ score, findings, active, onChange }: Props)
 
       <div className="pg-score-meta">
         <div className="pg-score-label">Compliance score</div>
-        <div className="pg-score-risk">{riskLabel(score)}</div>
+        <div className={`pg-score-risk ${riskClass(score)}`}>{riskLabel(score)}</div>
       </div>
 
       <div className="pg-chips" role="group" aria-label="Filter by severity">
